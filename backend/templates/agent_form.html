@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{% if editing %}Edit{% else %}New{% endif %} Agent | NexusDesk{% endblock %}
+{% block page_title %}{% if editing %}Edit Agent{% else %}New Agent{% endif %}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:750px">
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-row">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" value="{{ record.name|default:'' }}">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" value="{{ record.email|default:'' }}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Department</label>
+        <input type="text" name="department" value="{{ record.department|default:'' }}">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select name="role">
+          <option value="agent" {% if record.role == 'agent' %}selected{% endif %}>Agent</option>
+          <option value="supervisor" {% if record.role == 'supervisor' %}selected{% endif %}>Supervisor</option>
+          <option value="admin" {% if record.role == 'admin' %}selected{% endif %}>Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tickets Resolved</label>
+        <input type="number" name="tickets_resolved" value="{{ record.tickets_resolved|default:'0' }}">
+      </div>
+      <div class="form-group">
+        <label>Rating</label>
+        <input type="number" step="0.01" name="rating" value="{{ record.rating|default:'0' }}">
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="checkbox-wrapper">
+        <input type="checkbox" name="active" id="id_active" {% if record.active %}checked{% endif %}>
+        <label for="id_active" style="margin-bottom:0">Active</label>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;margin-top:1rem">
+      <button type="submit" class="btn btn-primary">{% if editing %}Update{% else %}Create{% endif %} Agent</button>
+      <a href="/agents/" class="btn" style="background:var(--border);color:var(--text)">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
