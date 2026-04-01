@@ -3,9 +3,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.conf import settings
-from .models import Record
+from django.db.models import Sum, Count
+from .models import Ticket, Agent, KBArticle
 
 
 def login_view(request):
@@ -30,67 +29,176 @@ def logout_view(request):
 
 @login_required
 def dashboard_view(request):
-    total = Record.objects.count()
-    active = Record.objects.filter(status='active').count()
-    pending = Record.objects.filter(status='pending').count()
-    inactive = Record.objects.filter(status='inactive').count()
-    recent = Record.objects.all()[:10]
-    return render(request, 'dashboard.html', {
-        'total': total, 'active': active, 'pending': pending,
-        'inactive': inactive, 'recent': recent,
-    })
+    ctx = {}
+    ctx['ticket_count'] = Ticket.objects.count()
+    ctx['ticket_low'] = Ticket.objects.filter(priority='low').count()
+    ctx['ticket_medium'] = Ticket.objects.filter(priority='medium').count()
+    ctx['ticket_high'] = Ticket.objects.filter(priority='high').count()
+    ctx['agent_count'] = Agent.objects.count()
+    ctx['agent_agent'] = Agent.objects.filter(role='agent').count()
+    ctx['agent_supervisor'] = Agent.objects.filter(role='supervisor').count()
+    ctx['agent_admin'] = Agent.objects.filter(role='admin').count()
+    ctx['agent_total_rating'] = Agent.objects.aggregate(t=Sum('rating'))['t'] or 0
+    ctx['kbarticle_count'] = KBArticle.objects.count()
+    ctx['kbarticle_draft'] = KBArticle.objects.filter(status='draft').count()
+    ctx['kbarticle_published'] = KBArticle.objects.filter(status='published').count()
+    ctx['kbarticle_archived'] = KBArticle.objects.filter(status='archived').count()
+    ctx['recent'] = Ticket.objects.all()[:10]
+    return render(request, 'dashboard.html', ctx)
 
 
 @login_required
-def records_view(request):
-    records = Record.objects.all()
-    status_filter = request.GET.get('status', '')
+def ticket_list(request):
+    qs = Ticket.objects.all()
     search = request.GET.get('search', '')
-    if status_filter:
-        records = records.filter(status=status_filter)
     if search:
-        records = records.filter(name__icontains=search)
-    return render(request, 'records.html', {'records': records, 'status_filter': status_filter, 'search': search})
+        qs = qs.filter(subject__icontains=search)
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        qs = qs.filter(priority=status_filter)
+    return render(request, 'ticket_list.html', {'records': qs, 'search': search, 'status_filter': status_filter})
 
 
 @login_required
-def record_create(request):
+def ticket_create(request):
     if request.method == 'POST':
-        Record.objects.create(
-            name=request.POST.get('name', ''),
-            description=request.POST.get('description', ''),
-            status=request.POST.get('status', 'active'),
-            email=request.POST.get('email', ''),
-            phone=request.POST.get('phone', ''),
-            amount=request.POST.get('amount', 0) or 0,
-            notes=request.POST.get('notes', ''),
-        )
-        return redirect('/records/')
-    return render(request, 'record_form.html', {'editing': False})
+        obj = Ticket()
+        obj.subject = request.POST.get('subject', '')
+        obj.requester_email = request.POST.get('requester_email', '')
+        obj.priority = request.POST.get('priority', '')
+        obj.status = request.POST.get('status', '')
+        obj.category = request.POST.get('category', '')
+        obj.assigned_to = request.POST.get('assigned_to', '')
+        obj.description = request.POST.get('description', '')
+        obj.save()
+        return redirect('/tickets/')
+    return render(request, 'ticket_form.html', {'editing': False})
 
 
 @login_required
-def record_edit(request, pk):
-    record = get_object_or_404(Record, pk=pk)
+def ticket_edit(request, pk):
+    obj = get_object_or_404(Ticket, pk=pk)
     if request.method == 'POST':
-        record.name = request.POST.get('name', record.name)
-        record.description = request.POST.get('description', record.description)
-        record.status = request.POST.get('status', record.status)
-        record.email = request.POST.get('email', record.email)
-        record.phone = request.POST.get('phone', record.phone)
-        record.amount = request.POST.get('amount', record.amount) or 0
-        record.notes = request.POST.get('notes', record.notes)
-        record.save()
-        return redirect('/records/')
-    return render(request, 'record_form.html', {'record': record, 'editing': True})
+        obj.subject = request.POST.get('subject', '')
+        obj.requester_email = request.POST.get('requester_email', '')
+        obj.priority = request.POST.get('priority', '')
+        obj.status = request.POST.get('status', '')
+        obj.category = request.POST.get('category', '')
+        obj.assigned_to = request.POST.get('assigned_to', '')
+        obj.description = request.POST.get('description', '')
+        obj.save()
+        return redirect('/tickets/')
+    return render(request, 'ticket_form.html', {'record': obj, 'editing': True})
 
 
 @login_required
-def record_delete(request, pk):
-    record = get_object_or_404(Record, pk=pk)
+def ticket_delete(request, pk):
+    obj = get_object_or_404(Ticket, pk=pk)
     if request.method == 'POST':
-        record.delete()
-    return redirect('/records/')
+        obj.delete()
+    return redirect('/tickets/')
+
+
+@login_required
+def agent_list(request):
+    qs = Agent.objects.all()
+    search = request.GET.get('search', '')
+    if search:
+        qs = qs.filter(name__icontains=search)
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        qs = qs.filter(role=status_filter)
+    return render(request, 'agent_list.html', {'records': qs, 'search': search, 'status_filter': status_filter})
+
+
+@login_required
+def agent_create(request):
+    if request.method == 'POST':
+        obj = Agent()
+        obj.name = request.POST.get('name', '')
+        obj.email = request.POST.get('email', '')
+        obj.department = request.POST.get('department', '')
+        obj.role = request.POST.get('role', '')
+        obj.tickets_resolved = request.POST.get('tickets_resolved') or 0
+        obj.rating = request.POST.get('rating') or 0
+        obj.active = request.POST.get('active') == 'on'
+        obj.save()
+        return redirect('/agents/')
+    return render(request, 'agent_form.html', {'editing': False})
+
+
+@login_required
+def agent_edit(request, pk):
+    obj = get_object_or_404(Agent, pk=pk)
+    if request.method == 'POST':
+        obj.name = request.POST.get('name', '')
+        obj.email = request.POST.get('email', '')
+        obj.department = request.POST.get('department', '')
+        obj.role = request.POST.get('role', '')
+        obj.tickets_resolved = request.POST.get('tickets_resolved') or 0
+        obj.rating = request.POST.get('rating') or 0
+        obj.active = request.POST.get('active') == 'on'
+        obj.save()
+        return redirect('/agents/')
+    return render(request, 'agent_form.html', {'record': obj, 'editing': True})
+
+
+@login_required
+def agent_delete(request, pk):
+    obj = get_object_or_404(Agent, pk=pk)
+    if request.method == 'POST':
+        obj.delete()
+    return redirect('/agents/')
+
+
+@login_required
+def kbarticle_list(request):
+    qs = KBArticle.objects.all()
+    search = request.GET.get('search', '')
+    if search:
+        qs = qs.filter(title__icontains=search)
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    return render(request, 'kbarticle_list.html', {'records': qs, 'search': search, 'status_filter': status_filter})
+
+
+@login_required
+def kbarticle_create(request):
+    if request.method == 'POST':
+        obj = KBArticle()
+        obj.title = request.POST.get('title', '')
+        obj.category = request.POST.get('category', '')
+        obj.content = request.POST.get('content', '')
+        obj.views = request.POST.get('views') or 0
+        obj.helpful_votes = request.POST.get('helpful_votes') or 0
+        obj.status = request.POST.get('status', '')
+        obj.save()
+        return redirect('/kbarticles/')
+    return render(request, 'kbarticle_form.html', {'editing': False})
+
+
+@login_required
+def kbarticle_edit(request, pk):
+    obj = get_object_or_404(KBArticle, pk=pk)
+    if request.method == 'POST':
+        obj.title = request.POST.get('title', '')
+        obj.category = request.POST.get('category', '')
+        obj.content = request.POST.get('content', '')
+        obj.views = request.POST.get('views') or 0
+        obj.helpful_votes = request.POST.get('helpful_votes') or 0
+        obj.status = request.POST.get('status', '')
+        obj.save()
+        return redirect('/kbarticles/')
+    return render(request, 'kbarticle_form.html', {'record': obj, 'editing': True})
+
+
+@login_required
+def kbarticle_delete(request, pk):
+    obj = get_object_or_404(KBArticle, pk=pk)
+    if request.method == 'POST':
+        obj.delete()
+    return redirect('/kbarticles/')
 
 
 @login_required
@@ -98,12 +206,10 @@ def settings_view(request):
     return render(request, 'settings.html')
 
 
-# API endpoints
 @login_required
 def api_stats(request):
-    return JsonResponse({
-        'total': Record.objects.count(),
-        'active': Record.objects.filter(status='active').count(),
-        'pending': Record.objects.filter(status='pending').count(),
-        'inactive': Record.objects.filter(status='inactive').count(),
-    })
+    data = {}
+    data['ticket_count'] = Ticket.objects.count()
+    data['agent_count'] = Agent.objects.count()
+    data['kbarticle_count'] = KBArticle.objects.count()
+    return JsonResponse(data)
