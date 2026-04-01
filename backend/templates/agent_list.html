@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Agents | NexusDesk{% endblock %}
+{% block page_title %}Agents{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+  <form class="search-bar" method="get" style="flex:1;margin-bottom:0">
+    <input type="text" name="search" value="{{ search }}" placeholder="Search agents...">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All Role</option>
+      <option value="agent" {% if status_filter == 'agent' %}selected{% endif %}>Agent</option>
+      <option value="supervisor" {% if status_filter == 'supervisor' %}selected{% endif %}>Supervisor</option>
+      <option value="admin" {% if status_filter == 'admin' %}selected{% endif %}>Admin</option>
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Search</button>
+  </form>
+  <a href="/agents/create/" class="btn btn-primary">+ New Agent</a>
+</div>
+
+<div class="card">
+  {% if records %}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th><th>Tickets Resolved</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td><a href="/agents/{{ r.pk }}/edit/"><strong>{{ r.name }}</strong></a></td>
+        <td style="color:var(--muted)">{{ r.email|default:"-" }}</td>
+        <td>{{ r.department|default:"-" }}</td>
+        <td><span class="badge badge-blue">{{ r.get_role_display }}</span></td>
+        <td>{{ r.tickets_resolved|default:"-" }}</td>
+        <td class="actions">
+          <a href="/agents/{{ r.pk }}/edit/" class="btn btn-primary btn-sm">Edit</a>
+          <form method="post" action="/agents/{{ r.pk }}/delete/" style="display:inline" onsubmit="return confirm('Delete?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger btn-sm">Del</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">
+    <p>No agents found.</p>
+    <a href="/agents/create/" class="btn btn-primary" style="margin-top:1rem">Create Agent</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
